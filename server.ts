@@ -12,7 +12,15 @@ const __dirname = path.dirname(__filename);
 function runPythonRpc(action: string, params: Record<string, any> = {}): Promise<any> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(__dirname, 'backend', 'hotel_backend.py');
-    const pythonProc = spawn('python3', [scriptPath, 'rpc']);
+    const pythonBin = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+    
+    let pythonProc;
+    try {
+      pythonProc = spawn(pythonBin, [scriptPath, 'rpc']);
+    } catch (e: any) {
+      return reject(new Error(`Could not spawn ${pythonBin}: ${e.message}`));
+    }
+
     let stdout = '';
     let stderr = '';
 
@@ -29,7 +37,7 @@ function runPythonRpc(action: string, params: Record<string, any> = {}): Promise
 
     pythonProc.on('close', (code) => {
       if (code !== 0) {
-        return reject(new Error(`Python process exited with code ${code}: ${stderr}`));
+        return reject(new Error(`Python process exited with code ${code}: ${stderr || stdout}`));
       }
       try {
         const parsed = JSON.parse(stdout.trim());
@@ -40,13 +48,50 @@ function runPythonRpc(action: string, params: Record<string, any> = {}): Promise
     });
 
     pythonProc.on('error', (err) => {
-      reject(err);
+      // If python3 failed with ENOENT on Windows or Linux, attempt fallback to 'python'
+      if ((err as any).code === 'ENOENT' && pythonBin === 'python3') {
+        const fallbackProc = spawn('python', [scriptPath, 'rpc']);
+        let fbStdout = '';
+        let fbStderr = '';
+        fallbackProc.stdin.write(JSON.stringify({ action, params }));
+        fallbackProc.stdin.end();
+        fallbackProc.stdout.on('data', (d) => { fbStdout += d.toString(); });
+        fallbackProc.stderr.on('data', (d) => { fbStderr += d.toString(); });
+        fallbackProc.on('close', (c) => {
+          if (c !== 0) return reject(new Error(`Python fallback exited with code ${c}: ${fbStderr}`));
+          try {
+            resolve(JSON.parse(fbStdout.trim()));
+          } catch (pe: any) {
+            reject(new Error(`Failed to parse Python fallback output: ${pe.message}`));
+          }
+        });
+        fallbackProc.on('error', (fallbackErr) => {
+          reject(new Error(`Python execution failed (tried python3 & python): ${fallbackErr.message}`));
+        });
+      } else {
+        reject(err);
+      }
     });
   });
 }
 
 async function startServer() {
   const app = express();
+  
+  // Trust proxy for GitHub Codespaces, Cloud Run, and preview proxies
+  app.set('trust proxy', 1);
+
+  // Enable CORS headers for preview environments and codespaces
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   app.use(express.json());
 
   const PORT = Number(process.env.PORT) || 3000;
@@ -56,8 +101,18 @@ async function startServer() {
     await runPythonRpc('init', { force: false });
     console.log('Hotel database initialized and verified.');
   } catch (err) {
-    console.error('Initial DB init error:', err);
+    console.warn('Initial DB init notice (backend will continue):', err);
   }
+
+  // Health check endpoint for GitHub preview / proxy monitors
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'Grand Horizon Luxury Hotel Management System',
+      currency: 'INR (₹)',
+      timestamp: new Date().toISOString()
+    });
+  });
 
   // 1. Get all hotel data
   app.get('/api/hotel/all', async (_req, res) => {
@@ -218,15 +273,20 @@ async function startServer() {
     }
   });
 
-  // Mount Vite or static server
-  if (process.env.NODE_ENV === 'production' && fs.existsSync(path.join(__dirname, 'dist'))) {
+  // Mount Vite dev server or static files
+  const isProduction = process.env.NODE_ENV === 'production' && fs.existsSync(path.join(__dirname, 'dist'));
+  if (isProduction) {
     app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   } else {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        host: '0.0.0.0',
+        allowedHosts: true, // Allow GitHub codespaces and preview hosts
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

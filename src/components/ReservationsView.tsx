@@ -40,10 +40,10 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      const matchName = `${b.first_name} ${b.last_name}`.toLowerCase().includes(q);
-      const matchId = b.id.toLowerCase().includes(q);
-      const matchRoom = b.room_number?.toLowerCase().includes(q);
-      const matchEmail = b.email.toLowerCase().includes(q);
+      const matchName = `${b.first_name || ''} ${b.last_name || ''}`.toLowerCase().includes(q);
+      const matchId = (b.id || '').toLowerCase().includes(q);
+      const matchRoom = b.room_number ? b.room_number.toLowerCase().includes(q) : false;
+      const matchEmail = b.email ? b.email.toLowerCase().includes(q) : false;
       if (!matchName && !matchId && !matchRoom && !matchEmail) return false;
     }
 

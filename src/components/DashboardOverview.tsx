@@ -58,12 +58,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       return false;
     }
 
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchNum = r.room_number.toLowerCase().includes(q);
-      const matchType = r.room_type_name.toLowerCase().includes(q);
-      const matchGuest = r.current_guest_name?.toLowerCase().includes(q);
+      const matchNum = (r.room_number || '').toLowerCase().includes(q);
+      const matchType = (r.room_type_name || '').toLowerCase().includes(q);
+      const matchGuest = (r.current_guest_name || '').toLowerCase().includes(q);
       if (!matchNum && !matchType && !matchGuest) return false;
     }
 

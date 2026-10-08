@@ -31,10 +31,10 @@ export const GuestDirectoryView: React.FC<GuestDirectoryViewProps> = ({
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      const matchName = `${g.first_name} ${g.last_name}`.toLowerCase().includes(q);
-      const matchEmail = g.email.toLowerCase().includes(q);
-      const matchPhone = g.phone.toLowerCase().includes(q);
-      const matchNotes = g.notes?.toLowerCase().includes(q);
+      const matchName = `${g.first_name || ''} ${g.last_name || ''}`.toLowerCase().includes(q);
+      const matchEmail = g.email ? g.email.toLowerCase().includes(q) : false;
+      const matchPhone = g.phone ? g.phone.toLowerCase().includes(q) : false;
+      const matchNotes = g.notes ? g.notes.toLowerCase().includes(q) : false;
       if (!matchName && !matchEmail && !matchPhone && !matchNotes) return false;
     }
 
