@@ -1,0 +1,6 @@
+{
+  "name": "Grand Horizon - Hotel Management System",
+  "description": "Full-stack luxury hotel management system powered by Python, SQL database, and modern web interface featuring front desk, reservations, billing, housekeeping, live SQL studio, and Python API engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
